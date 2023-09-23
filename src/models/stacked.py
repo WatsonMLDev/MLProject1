@@ -14,20 +14,34 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def prepare_knn_model(train_x, train_y):
 
-    # model selection: hyperparameter tuning
-    hyperpara_grid = {'n_neighbors':[3, 5, 10, 15]} # candidate values for the hyperparameter to try
-    base_model = KNeighborsClassifier()
-    clf = GridSearchCV(base_model, hyperpara_grid, cv=5) # 5-fold cross validation
-    clf.fit(train_x, train_y)
+    # Objective function to optimize
+    def objective(params):
+        n_neighbors = params[0]
 
-    #re-train model after finding the optimal hyper params:
-    optimal_k = clf.best_params_['n_neighbors']
-    final_model = KNeighborsClassifier(n_neighbors=optimal_k)
+        model = KNeighborsClassifier(n_neighbors=n_neighbors)
+
+        # We use cross_val_score and take the negative mean of the scores since we want to maximize F1-score
+        return -np.mean(cross_val_score(model, train_x, train_y, cv=5, n_jobs=-1, scoring="f1"))
+
+    # Define the hyperparameter space to search
+    space = [
+        Integer(3, 15, name="n_neighbors")
+    ]
+
+    # Run the optimizer
+    result = gp_minimize(objective, space, n_calls=15, random_state=42, verbose=True)
+
+    optimal_n_neighbors = result.x[0]
+    print(f"Optimal number of neighbors: {optimal_n_neighbors}")
+
+    # Train the model with optimal hyperparameters
+    final_model = KNeighborsClassifier(n_neighbors=optimal_n_neighbors)
     final_model.fit(train_x, train_y)
 
+    # Evaluate the model
     train_y_pred = final_model.predict(train_x)
-    print(accuracy_score(train_y, train_y_pred))
-    print(f1_score(train_y, train_y_pred))
+    print("Training Accuracy:", accuracy_score(train_y, train_y_pred))
+    print("Training F1 Score:", f1_score(train_y, train_y_pred))
 
     return final_model
 
@@ -51,7 +65,7 @@ def prepare_rf_model(train_x, train_y, tune=True):
     if tune:
         space = [
             Integer(50, 200, name="n_estimators"),
-            Integer(-1, 30, name="max_depth"),  # -1 means None (no limit)
+            Integer(1, 30, name="max_depth"),  # -1 means None (no limit)
             Integer(2, 10, name="min_samples_split"),
             Integer(1, 4, name="min_samples_leaf"),
             Categorical(['auto', 'sqrt'], name="max_features")
@@ -71,7 +85,7 @@ def prepare_rf_model(train_x, train_y, tune=True):
             n_jobs=-1
         )
     else:
-        best_rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        best_rf_model = RandomForestClassifier(n_estimators=50,max_depth=30, min_samples_split=10, min_samples_leaf=4, max_features='sqrt', random_state=42, n_jobs=-1)
 
     best_rf_model.fit(train_x, train_y)
     return best_rf_model
@@ -111,12 +125,12 @@ def prepare_svm_model(train_x, train_y, tune=True):
             random_state=42
         )
     else:
-        best_svm_model = SVC(random_state=42)
+        best_svm_model = SVC(C=1.3363634663750545, degree= 5, kernel='rbf', gamma='auto', random_state=42)
 
     best_svm_model.fit(train_x, train_y)
     return best_svm_model
 
-def prepare_model(train_x, train_y, tune=True):
+def prepare_nn_model(train_x, train_y, tune=True):
 
     def objective(params):
         hidden_layer_sizes, activation, solver, alpha, learning_rate_init = params
@@ -156,7 +170,7 @@ def prepare_model(train_x, train_y, tune=True):
             max_iter=1000
         )
     else:
-        best_nn_model = MLPClassifier(hidden_layer_sizes=(100,), max_iter=1000, activation='relu', solver='adam', random_state=42)
+        best_nn_model = MLPClassifier(hidden_layer_sizes=(10,), max_iter=1000, activation='tanh', solver='adam', alpha=1e-05, learning_rate_init=0.0006863989086718845, random_state=42)
 
     best_nn_model.fit(train_x, train_y)
     return best_nn_model

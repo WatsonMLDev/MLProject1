@@ -1,5 +1,8 @@
 import warnings
+
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import cross_val_score
 from skopt import gp_minimize
 from skopt.space import Integer, Categorical, Real
@@ -26,10 +29,10 @@ def prepare_model(train_x, train_y, tune=True):
     if tune:
         space = [
             Integer(50, 200, name="n_estimators"),
-            Integer(-1, 30, name="max_depth"),  # -1 means None (no limit)
+            Integer(1, 30, name="max_depth"),  # -1 means None (no limit)
             Integer(2, 10, name="min_samples_split"),
             Integer(1, 4, name="min_samples_leaf"),
-            Categorical(['auto', 'sqrt'], name="max_features")
+            Categorical(['sqrt'], name="max_features")
         ]
 
         # Run the optimizer
@@ -49,4 +52,10 @@ def prepare_model(train_x, train_y, tune=True):
         best_rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
 
     best_rf_model.fit(train_x, train_y)
+
+    # Evaluate the model on training data
+    train_y_pred = best_rf_model.predict(train_x)
+    print("Training Accuracy:", accuracy_score(train_y, train_y_pred))
+    print("Training F1 Score:", f1_score(train_y, train_y_pred))
+
     return best_rf_model
